@@ -1,0 +1,124 @@
+<html>
+<head>
+<meta charset='utf-8'>
+<title>untitled</title>
+<meta name="viewport" content="width=device-width, user-scalable=no">
+<style>
+
+body {
+    margin: 0px;
+}
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0px;
+}
+
+</style>
+</head>
+<body>
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="http://dglittle.github.io/gl519/index.js"></script>
+<script src="utils.js"></script>
+<script src="http://cdn.sockjs.org/sockjs-0.3.min.js"></script>
+<div id="main"></div>
+<script>
+
+if (location.protocol.match(/^file/)) {
+    var buddhapongServer = 'http://localhost:8080'
+} else {
+    var buddhapongServer = 'http://buddhapong-server-env-w434ankmsv.elasticbeanstalk.com'
+}
+
+var waitCount = 0
+
+waitCount++
+var ws = new SockJS(buddhapongServer + '/ws')
+ws.onopen = function() { waitCount--; main() }
+
+waitCount++
+$(function () { waitCount--; main() })
+
+function main() {
+    if (waitCount > 0) return
+
+    var size = getWindowSize()
+
+    var chatHistory = $('<div style="box-sizing:border-box;border:1px solid black"/>')
+    chatHistory.setPos(0, 0, size[0], size[1]/2)
+    $('#main').append(chatHistory)
+
+    var chatInput = $('<input type="text">')
+    chatInput.setPos(0, size[1]/2, size[0], 20)
+    function onSend() {
+        ws.send(_.json({ text : chatInput.val() }))
+        chatInput.val('')
+    }
+    chatInput.on('keydown', function (e) {
+        if (e.keyCode == 13) {
+            onSend()
+        }
+    })
+    $('#main').append(chatInput)
+
+    var sendButton = $('<button/>').html('send<br/><small>you can also press enter</small>')
+    sendButton.setPos(0, size[1]/2 + 20, 150, 40)
+    sendButton.click(onSend)
+    $('#main').append(sendButton)
+
+    ws.onmessage = function (e) {
+        var data = _.unJson(e.data)
+        if (!(data instanceof Array)) data = [data]
+
+        _.each(data, function (data) {
+            chatHistory.append($('<div/>').text(data.time + ': ' + data.text))
+        })
+    }
+    ws.send('')
+
+    ///
+
+    function drawPhoneNumberThing() {
+        var d = $('<div/>')
+        d.append($('<span/>').text('phone number: '))
+        var phoneNumber = $('<input type="text">')
+        d.append(phoneNumber)
+        d.append($('<button/>').text('send verification code').click(function () {
+            $.post(buddhapongServer + '/addPhoneNumber', phoneNumber.val(), function (x) {
+                alert('verification code sent, check your text messages')
+            })
+        }))
+        d.append($('<span/>').text('verification code: '))
+        var verificationCode = $('<input type="text">')
+        d.append(verificationCode)
+        d.append($('<br/>'))
+        d.append($('<span/>').text('at most 1 text message every: '))
+        var minutes = $('<input type="text">')
+        d.append(minutes)
+        d.append($('<span/>').text('minutes'))
+        d.append($('<button/>').text('update').click(function () {
+            $.ajax({
+                type : 'POST',
+                url : buddhapongServer + '/verifyPhoneNumber',
+                data : _.json({
+                    number : phoneNumber.val(),
+                    verificationCode : verificationCode.val(),
+                    waitTime : (1*minutes.val() * 1000*60)
+                }),
+                success : function (x) {
+                    alert('preferences updated successfully')
+                },
+                error : function(XMLHttpRequest, textStatus, errorThrown) {
+                    alert('error, probably wrong verification code')
+                }
+            })
+        }))
+        return d
+    }
+    $('#main').append(drawPhoneNumberThing().setPos(0, size[1]*3/4, size[0], size[1]/4))
+}
+
+</script>
+</body>
+</html>
